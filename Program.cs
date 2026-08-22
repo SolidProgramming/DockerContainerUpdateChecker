@@ -30,11 +30,6 @@ builder.Configuration
     .AddJsonFile(localSettingsPath, optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-builder.Logging.AddSimpleConsole(options =>
-{
-    options.UseUtcTimestamp = false;
-    options.SingleLine = true;
-});
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
 builder.Logging.AddFilter("System", LogLevel.Warning);
