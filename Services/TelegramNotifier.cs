@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DockerContainerUpdateChecker.Configuration;
+using DockerContainerUpdateChecker.Models;
 using Microsoft.Extensions.Options;
 
 namespace DockerContainerUpdateChecker.Services;
@@ -39,14 +40,18 @@ public sealed class TelegramNotifier(
             payload.Result.Username);
     }
 
-    public async Task SendAsync(string message, CancellationToken cancellationToken, bool silent = false)
+    public async Task SendAsync(TelegramMessage message, CancellationToken cancellationToken, bool silent = false)
     {
         using var client = httpClientFactory.CreateClient(HttpClientName);
         var requestUri = $"https://api.telegram.org/bot{telegramOptions.BotToken}/sendMessage";
 
         using var response = await client.PostAsJsonAsync(
             requestUri,
-            new TelegramSendMessageRequest(telegramOptions.ChatId, message, silent),
+            new TelegramSendMessageRequest(
+                telegramOptions.ChatId,
+                message.Text,
+                silent,
+                message.ParseMode),
             cancellationToken);
 
         if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
@@ -58,13 +63,22 @@ public sealed class TelegramNotifier(
                 telegramOptions.ChatId);
         }
 
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Telegram sendMessage failed with status {(int)response.StatusCode} ({response.ReasonPhrase}). Response: {responseBody}",
+                null,
+                response.StatusCode);
+        }
     }
 
     private sealed record TelegramSendMessageRequest(
         [property: JsonPropertyName("chat_id")] string ChatId,
         [property: JsonPropertyName("text")] string Text,
-        [property: JsonPropertyName("disable_notification")] bool DisableNotification);
+        [property: JsonPropertyName("disable_notification")] bool DisableNotification,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [property: JsonPropertyName("parse_mode")] string? ParseMode);
 
     private sealed record TelegramGetMeResponse(
         [property: JsonPropertyName("ok")] bool Ok,

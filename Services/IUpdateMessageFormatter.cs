@@ -4,5 +4,5 @@ namespace DockerContainerUpdateChecker.Services;
 
 public interface IUpdateMessageFormatter
 {
-    string Format(PersistedUpdateState? previous, UpdateCheckResult current);
+    TelegramMessage Format(PersistedUpdateState? previous, UpdateCheckResult current);
 }

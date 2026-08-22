@@ -2,6 +2,7 @@ using Cronos;
 using Docker.DotNet;
 using DockerContainerUpdateChecker.Configuration;
 using DockerContainerUpdateChecker.Jobs;
+using DockerContainerUpdateChecker.Models;
 using DockerContainerUpdateChecker.Services;
 using Hangfire;
 using Hangfire.Dashboard;
@@ -122,6 +123,7 @@ var nextRunUtc = schedulerExpression.GetNextOccurrence(timeProvider.GetUtcNow().
 DateTimeOffset? nextRunLocal = nextRunUtc.HasValue
     ? TimeZoneInfo.ConvertTime(new DateTimeOffset(DateTime.SpecifyKind(nextRunUtc.Value, DateTimeKind.Utc)), timeProvider.LocalTimeZone)
     : null;
+var hangfireUrl = $"http://localhost:{serverOptions.Port}/hangfire";
 var telegramNotifier = app.Services.GetRequiredService<ITelegramNotifier>();
 var telegramBotIdentity = await telegramNotifier.GetBotIdentityAsync(CancellationToken.None);
 var startupLocalTimeText = startupLocalTime.ToString("G", configuredCulture);
@@ -130,6 +132,7 @@ var nextRunLocalText = nextRunLocal?.ToString("G", configuredCulture);
 logger.LogInformation("Application startup completed at local time {StartupLocalTime}.", startupLocalTimeText);
 logger.LogInformation("Resolved local settings path: {LocalSettingsPath}", localSettingsPath);
 logger.LogInformation("Configured HTTP port: {Port}", serverOptions.Port);
+logger.LogInformation("Hangfire dashboard is available at {HangfireUrl}", hangfireUrl);
 logger.LogInformation("Resolved container API endpoint: {DockerEndpoint}", resolvedDockerEndpoint);
 logger.LogInformation("Configured Telegram chat id: {TelegramChatId}", telegramOptions.ChatId);
 logger.LogInformation("Configured localization culture: {Culture}", localizationOptions.Culture);
@@ -139,11 +142,22 @@ logger.LogInformation(
     telegramBotIdentity.Username ?? "<no-username>",
     telegramBotIdentity.FirstName);
 logger.LogInformation("Sending Telegram startup test notification to chat id {TelegramChatId}.", telegramOptions.ChatId);
-await telegramNotifier.SendAsync(
-    $"Startup test notification sent at {startupLocalTimeText} local time.",
-    CancellationToken.None,
-    silent: true);
-logger.LogInformation("Telegram startup test notification sent successfully.");
+try
+{
+    await telegramNotifier.SendAsync(
+        new TelegramMessage(
+            $"Startup test notification sent at {startupLocalTimeText} local time."),
+        CancellationToken.None,
+        silent: true);
+    logger.LogInformation("Telegram startup test notification sent successfully.");
+}
+catch (HttpRequestException ex)
+{
+    logger.LogWarning(
+        ex,
+        "Telegram startup test notification could not be delivered to chat id {TelegramChatId}. Continuing startup because bot validation already succeeded.",
+        telegramOptions.ChatId);
+}
 logger.LogInformation("Configured storage data directory: {DataDirectory}", storageOptions.DataDirectory);
 logger.LogInformation("Configured cron expression: {CronExpression}", schedulerOptions.Cron);
 logger.LogInformation("Configured run-on-startup update check: {RunOnStartup}", schedulerOptions.RunOnStartup);

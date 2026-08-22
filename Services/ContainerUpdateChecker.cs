@@ -19,6 +19,7 @@ public sealed class ContainerUpdateChecker(
         var checkedAtUtc = timeProvider.GetUtcNow();
         var checkedAtLocal = TimeZoneInfo.ConvertTime(checkedAtUtc, timeProvider.LocalTimeZone);
         var checkedAtLocalText = checkedAtLocal.ToString("G", CultureInfo.CurrentCulture);
+        var startedAt = timeProvider.GetTimestamp();
         var updates = new List<ContainerUpdateInfo>();
         var errors = new List<string>();
         logger.LogInformation("Starting container update check at local time {CheckedAtLocal}.", checkedAtLocalText);
@@ -73,6 +74,11 @@ public sealed class ContainerUpdateChecker(
             checkedAtLocalText,
             updates.Count,
             errors.Count);
-        return new UpdateCheckResult(checkedAtUtc, updates, errors);
+        return new UpdateCheckResult(
+            checkedAtUtc,
+            timeProvider.GetElapsedTime(startedAt),
+            containers.Count,
+            updates,
+            errors);
     }
 }
