@@ -22,7 +22,8 @@ If the local file does not exist yet, the app creates a starter file automatical
     "Culture": "de-DE"
   },
   "Scheduler": {
-    "Cron": "0 6 * * *"
+    "Cron": "0 6 * * *",
+    "RunOnStartup": false
   },
   "Docker": {
     "Endpoint": ""
@@ -41,6 +42,7 @@ If the local file does not exist yet, the app creates a starter file automatical
 ```
 
 Set `Localization:Culture` to a .NET culture such as `de-DE` or `en-US` to control localized date and time formatting in logs and notifications.
+Set `Scheduler:RunOnStartup` to `true` if the container should execute one immediate update check after startup instead of waiting for the next cron occurrence.
 
 ## Unraid / Docker notes
 

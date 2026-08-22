@@ -39,14 +39,14 @@ public sealed class TelegramNotifier(
             payload.Result.Username);
     }
 
-    public async Task SendAsync(string message, CancellationToken cancellationToken)
+    public async Task SendAsync(string message, CancellationToken cancellationToken, bool silent = false)
     {
         using var client = httpClientFactory.CreateClient(HttpClientName);
         var requestUri = $"https://api.telegram.org/bot{telegramOptions.BotToken}/sendMessage";
 
         using var response = await client.PostAsJsonAsync(
             requestUri,
-            new TelegramSendMessageRequest(telegramOptions.ChatId, message),
+            new TelegramSendMessageRequest(telegramOptions.ChatId, message, silent),
             cancellationToken);
 
         if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
@@ -63,7 +63,8 @@ public sealed class TelegramNotifier(
 
     private sealed record TelegramSendMessageRequest(
         [property: JsonPropertyName("chat_id")] string ChatId,
-        [property: JsonPropertyName("text")] string Text);
+        [property: JsonPropertyName("text")] string Text,
+        [property: JsonPropertyName("disable_notification")] bool DisableNotification);
 
     private sealed record TelegramGetMeResponse(
         [property: JsonPropertyName("ok")] bool Ok,

@@ -147,10 +147,12 @@ logger.LogInformation(
 logger.LogInformation("Sending Telegram startup test notification to chat id {TelegramChatId}.", telegramOptions.ChatId);
 await telegramNotifier.SendAsync(
     $"Startup test notification sent at {startupLocalTimeText} local time.",
-    CancellationToken.None);
+    CancellationToken.None,
+    silent: true);
 logger.LogInformation("Telegram startup test notification sent successfully.");
 logger.LogInformation("Configured storage data directory: {DataDirectory}", storageOptions.DataDirectory);
 logger.LogInformation("Configured cron expression: {CronExpression}", schedulerOptions.Cron);
+logger.LogInformation("Configured run-on-startup update check: {RunOnStartup}", schedulerOptions.RunOnStartup);
 
 if (nextRunLocal.HasValue)
 {
@@ -171,6 +173,14 @@ RecurringJob.AddOrUpdate<UpdateCheckJob>(
     recurringJobId: "docker-update-check",
     methodCall: job => job.RunAsync(CancellationToken.None),
     cronExpression: schedulerOptions.Cron);
+
+if (schedulerOptions.RunOnStartup)
+{
+    logger.LogInformation("RunOnStartup is enabled. Executing one immediate docker update check.");
+    var startupUpdateCheckJob = app.Services.GetRequiredService<UpdateCheckJob>();
+    await startupUpdateCheckJob.RunAsync(CancellationToken.None);
+    logger.LogInformation("Immediate startup docker update check finished.");
+}
 
 app.Run();
 
@@ -200,7 +210,8 @@ internal static class AppSettingsLocalBootstrapper
             "Culture": "en-US"
           },
           "Scheduler": {
-            "Cron": "0 6 * * *"
+            "Cron": "0 6 * * *",
+            "RunOnStartup": false
           },
           "Docker": {
             "Endpoint": ""
