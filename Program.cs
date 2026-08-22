@@ -32,7 +32,6 @@ builder.Configuration
 
 builder.Logging.AddSimpleConsole(options =>
 {
-    options.TimestampFormat = $"{configuredCulture.DateTimeFormat.ShortDatePattern} {configuredCulture.DateTimeFormat.LongTimePattern} ";
     options.UseUtcTimestamp = false;
     options.SingleLine = true;
 });
