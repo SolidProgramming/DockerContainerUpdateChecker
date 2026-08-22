@@ -81,16 +81,55 @@ builder.Services.AddSingleton<IUpdateMessageFormatter, UpdateMessageFormatter>()
 builder.Services.AddSingleton<IContainerUpdateChecker, ContainerUpdateChecker>();
 builder.Services.AddSingleton<JobExecutionGate>();
 builder.Services.AddSingleton<UpdateCheckJob>();
-builder.Services.AddSingleton<TelegramTestJob>();
 
 builder.Services.AddHangfire(configuration => configuration.UseInMemoryStorage());
 builder.Services.AddHangfireServer();
 
 var app = builder.Build();
 
-_ = app.Services.GetRequiredService<IOptions<ServerOptions>>().Value;
+var logger = app.Logger;
+var timeProvider = app.Services.GetRequiredService<TimeProvider>();
+var serverOptions = app.Services.GetRequiredService<IOptions<ServerOptions>>().Value;
 var schedulerOptions = app.Services.GetRequiredService<IOptions<SchedulerOptions>>().Value;
-_ = CronExpression.Parse(schedulerOptions.Cron, CronFormat.Standard);
+var telegramOptions = app.Services.GetRequiredService<IOptions<TelegramOptions>>().Value;
+var dockerOptions = app.Services.GetRequiredService<IOptions<DockerOptions>>().Value;
+var storageOptions = app.Services.GetRequiredService<IOptions<StorageOptions>>().Value;
+var schedulerExpression = CronExpression.Parse(schedulerOptions.Cron, CronFormat.Standard);
+var resolvedDockerEndpoint = DockerEndpointResolver.Resolve(dockerOptions.Endpoint);
+var startupLocalTime = TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timeProvider.LocalTimeZone);
+var nextRunUtc = schedulerExpression.GetNextOccurrence(timeProvider.GetUtcNow().UtcDateTime, timeProvider.LocalTimeZone);
+DateTimeOffset? nextRunLocal = nextRunUtc.HasValue
+    ? TimeZoneInfo.ConvertTime(new DateTimeOffset(DateTime.SpecifyKind(nextRunUtc.Value, DateTimeKind.Utc)), timeProvider.LocalTimeZone)
+    : null;
+var telegramNotifier = app.Services.GetRequiredService<ITelegramNotifier>();
+var telegramBotIdentity = await telegramNotifier.GetBotIdentityAsync(CancellationToken.None);
+
+logger.LogWarning("Application startup completed at local time {StartupLocalTime}.", startupLocalTime);
+logger.LogWarning("Resolved local settings path: {LocalSettingsPath}", localSettingsPath);
+logger.LogWarning("Configured HTTP port: {Port}", serverOptions.Port);
+logger.LogWarning("Resolved container API endpoint: {DockerEndpoint}", resolvedDockerEndpoint);
+logger.LogWarning("Configured Telegram chat id: {TelegramChatId}", telegramOptions.ChatId);
+logger.LogWarning(
+    "Telegram bot validation succeeded. Bot id: {TelegramBotId}, username: {TelegramBotUsername}, display name: {TelegramBotName}.",
+    telegramBotIdentity.Id,
+    telegramBotIdentity.Username ?? "<no-username>",
+    telegramBotIdentity.FirstName);
+logger.LogWarning("Sending Telegram startup test notification to chat id {TelegramChatId}.", telegramOptions.ChatId);
+await telegramNotifier.SendAsync(
+    $"Startup test notification sent at {startupLocalTime:yyyy-MM-dd HH:mm:ss zzz} local time.",
+    CancellationToken.None);
+logger.LogWarning("Telegram startup test notification sent successfully.");
+logger.LogWarning("Configured storage data directory: {DataDirectory}", storageOptions.DataDirectory);
+logger.LogWarning("Configured cron expression: {CronExpression}", schedulerOptions.Cron);
+
+if (nextRunLocal.HasValue)
+{
+    logger.LogWarning("Next scheduled docker update check will run at local time {NextRunLocalTime}.", nextRunLocal.Value);
+}
+else
+{
+    logger.LogWarning("No next scheduled docker update check could be calculated for cron expression {CronExpression}.", schedulerOptions.Cron);
+}
 
 app.MapGet("/", () => Results.Redirect("/hangfire"));
 app.MapHangfireDashboard("/hangfire", new DashboardOptions
@@ -102,11 +141,6 @@ RecurringJob.AddOrUpdate<UpdateCheckJob>(
     recurringJobId: "docker-update-check",
     methodCall: job => job.RunAsync(CancellationToken.None),
     cronExpression: schedulerOptions.Cron);
-
-RecurringJob.AddOrUpdate<TelegramTestJob>(
-    recurringJobId: "telegram-test-notification",
-    methodCall: job => job.RunAsync(CancellationToken.None),
-    cronExpression: "0 0 1 1 *");
 
 app.Run();
 
@@ -131,6 +165,9 @@ internal static class AppSettingsLocalBootstrapper
         {
           "Server": {
             "Port": 8080
+          },
+          "Scheduler": {
+            "Cron": "0 6 * * *"
           },
           "Docker": {
             "Endpoint": ""

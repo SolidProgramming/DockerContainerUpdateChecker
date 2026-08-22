@@ -70,7 +70,7 @@ Examples:
 - By default, all running containers are checked
 - Individual containers can be excluded through `Monitoring:ExcludedContainers`
 - Hangfire uses in-memory storage, so dashboard history is cleared after a container restart
-- A separate `telegram-test-notification` Hangfire job is available for manual Telegram tests from the dashboard
+- The app sends a Telegram startup test notification after successful startup validation
 - The last functional update state is stored separately in `/config/data/last-update-state.json` by default so notifications remain stable across restarts
 
 ## Telegram troubleshooting

@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using DockerContainerUpdateChecker.Configuration;
 using Microsoft.Extensions.Options;
@@ -15,6 +16,28 @@ public sealed class TelegramNotifier(
     private readonly IHttpClientFactory httpClientFactory = httpClientFactory;
     private readonly TelegramOptions telegramOptions = telegramOptions.Value;
     private readonly ILogger<TelegramNotifier> logger = logger;
+
+    public async Task<TelegramBotIdentity> GetBotIdentityAsync(CancellationToken cancellationToken)
+    {
+        using var client = httpClientFactory.CreateClient(HttpClientName);
+        var requestUri = $"https://api.telegram.org/bot{telegramOptions.BotToken}/getMe";
+
+        using var response = await client.GetAsync(requestUri, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var payload = await JsonSerializer.DeserializeAsync<TelegramGetMeResponse>(stream, cancellationToken: cancellationToken);
+
+        if (payload is null || !payload.Ok || payload.Result is null)
+        {
+            throw new InvalidOperationException("Telegram getMe did not return a valid bot identity.");
+        }
+
+        return new TelegramBotIdentity(
+            payload.Result.Id,
+            payload.Result.FirstName,
+            payload.Result.Username);
+    }
 
     public async Task SendAsync(string message, CancellationToken cancellationToken)
     {
@@ -41,4 +64,13 @@ public sealed class TelegramNotifier(
     private sealed record TelegramSendMessageRequest(
         [property: JsonPropertyName("chat_id")] string ChatId,
         [property: JsonPropertyName("text")] string Text);
+
+    private sealed record TelegramGetMeResponse(
+        [property: JsonPropertyName("ok")] bool Ok,
+        [property: JsonPropertyName("result")] TelegramBotResult? Result);
+
+    private sealed record TelegramBotResult(
+        [property: JsonPropertyName("id")] long Id,
+        [property: JsonPropertyName("first_name")] string FirstName,
+        [property: JsonPropertyName("username")] string? Username);
 }
