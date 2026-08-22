@@ -4,9 +4,14 @@ Checks running Docker containers for updated image digests and sends a Telegram 
 
 ## Configuration
 
-The app reads `appsettings.json` and optionally `appsettings.Local.json`.
+The app reads `appsettings.json` and then a local override file.
 
-If `appsettings.Local.json` does not exist yet, the app creates a starter file automatically on first launch in the application directory. In a container setup, this works best when you mount a writable host path to `/app/appsettings.Local.json` or the whole `/app` config location you want to persist.
+Local override file resolution:
+
+1. `/config/appsettings.Local.json` if `/config` exists
+2. otherwise `appsettings.Local.json` in the application directory
+
+If the local file does not exist yet, the app creates a starter file automatically at the resolved location on first launch.
 
 ```json
 {
@@ -27,7 +32,7 @@ If `appsettings.Local.json` does not exist yet, the app creates a starter file a
     "ExcludedContainers": [ "unraid-db" ]
   },
   "Storage": {
-    "DataDirectory": "/data"
+    "DataDirectory": "/config/data"
   }
 }
 ```
@@ -35,8 +40,9 @@ If `appsettings.Local.json` does not exist yet, the app creates a starter file a
 ## Unraid / Docker notes
 
 - Mount the Docker socket: `/var/run/docker.sock:/var/run/docker.sock`
-- Mount a persistent volume for state, for example `/mnt/user/appdata/docker-update-checker:/data`
-- Mount `/app/appsettings.Local.json` from the host if you want to edit and persist the generated local configuration file outside the container
+- Mount a single parent folder from the host to `/config`, for example `/mnt/user/appdata/dockercontainerupdatechecker:/config`
+- The generated `appsettings.Local.json` will then be created at `/config/appsettings.Local.json`
+- Persistent state will be stored under `/config/data`
 - Map a host port to the internal container port, default `8080`
 - The Hangfire dashboard is available at `/hangfire`
 
@@ -65,7 +71,7 @@ Examples:
 - Individual containers can be excluded through `Monitoring:ExcludedContainers`
 - Hangfire uses in-memory storage, so dashboard history is cleared after a container restart
 - A separate `telegram-test-notification` Hangfire job is available for manual Telegram tests from the dashboard
-- The last functional update state is stored separately in `/data/last-update-state.json` so notifications remain stable across restarts
+- The last functional update state is stored separately in `/config/data/last-update-state.json` by default so notifications remain stable across restarts
 
 ## Telegram troubleshooting
 

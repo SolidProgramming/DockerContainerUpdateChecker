@@ -9,13 +9,13 @@ using Hangfire.InMemory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-AppSettingsLocalBootstrapper.EnsureExists();
+var localSettingsPath = AppSettingsLocalBootstrapper.EnsureExists();
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+    .AddJsonFile(localSettingsPath, optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -117,12 +117,14 @@ internal sealed class AllowAllDashboardAuthorizationFilter : IDashboardAuthoriza
 
 internal static class AppSettingsLocalBootstrapper
 {
-    public static void EnsureExists()
+    private const string PreferredConfigDirectory = "/config";
+
+    public static string EnsureExists()
     {
-        var localSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.Local.json");
+        var localSettingsPath = ResolveLocalSettingsPath();
         if (File.Exists(localSettingsPath))
         {
-            return;
+            return localSettingsPath;
         }
 
         const string template = """
@@ -138,13 +140,19 @@ internal static class AppSettingsLocalBootstrapper
             "ChatId": "replace-me"
           },
           "Storage": {
-            "DataDirectory": "/data"
+            "DataDirectory": "/config/data"
           }
         }
         """;
 
         try
         {
+            var directory = Path.GetDirectoryName(localSettingsPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             File.WriteAllText(localSettingsPath, template + Environment.NewLine);
             Console.WriteLine($"Created default local settings file at '{localSettingsPath}'.");
         }
@@ -153,5 +161,14 @@ internal static class AppSettingsLocalBootstrapper
             Console.Error.WriteLine(
                 $"Failed to create default local settings file at '{localSettingsPath}': {ex.Message}");
         }
+
+        return localSettingsPath;
+    }
+
+    private static string ResolveLocalSettingsPath()
+    {
+        return Directory.Exists(PreferredConfigDirectory)
+            ? Path.Combine(PreferredConfigDirectory, "appsettings.Local.json")
+            : Path.Combine(AppContext.BaseDirectory, "appsettings.Local.json");
     }
 }
