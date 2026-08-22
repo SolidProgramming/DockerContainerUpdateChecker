@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "DockerContainerUpdateChecker": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}
