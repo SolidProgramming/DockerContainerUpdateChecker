@@ -24,19 +24,23 @@ public sealed class UpdateCheckJob(
         var previousState = await updateStateStore.LoadAsync(cancellationToken);
         var currentResult = await updateChecker.CheckAsync(cancellationToken);
         var currentState = updateStateComparer.CreateState(currentResult);
+        var hasChanged = updateStateComparer.HasChanged(previousState, currentResult);
 
-        if (updateStateComparer.HasChanged(previousState, currentResult))
+        if (hasChanged)
         {
             logger.LogInformation(
                 "Update state changed. Sending Telegram notification for {UpdateCount} update(s).",
                 currentResult.Updates.Count);
-            var message = updateMessageFormatter.Format(previousState, currentResult);
-            await telegramNotifier.SendAsync(message, cancellationToken);
         }
         else
         {
-            logger.LogInformation("Update state unchanged. No Telegram notification will be sent.");
+            logger.LogInformation(
+                "Update state unchanged. Sending Telegram notification anyway for {UpdateCount} update(s).",
+                currentResult.Updates.Count);
         }
+
+        var message = updateMessageFormatter.Format(previousState, currentResult);
+        await telegramNotifier.SendAsync(message, cancellationToken);
 
         await updateStateStore.SaveAsync(currentState, cancellationToken);
         logger.LogInformation("Update check job finished and state was persisted.");
