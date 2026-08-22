@@ -1,4 +1,5 @@
 using DockerContainerUpdateChecker.Models;
+using System.Globalization;
 
 namespace DockerContainerUpdateChecker.Services;
 
@@ -17,11 +18,12 @@ public sealed class ContainerUpdateChecker(
     {
         var checkedAtUtc = timeProvider.GetUtcNow();
         var checkedAtLocal = TimeZoneInfo.ConvertTime(checkedAtUtc, timeProvider.LocalTimeZone);
+        var checkedAtLocalText = checkedAtLocal.ToString("G", CultureInfo.CurrentCulture);
         var updates = new List<ContainerUpdateInfo>();
         var errors = new List<string>();
-        logger.LogWarning("Starting container update check at local time {CheckedAtLocal}.", checkedAtLocal);
+        logger.LogInformation("Starting container update check at local time {CheckedAtLocal}.", checkedAtLocalText);
         var containers = await containerCatalog.GetRunningContainersAsync(cancellationToken);
-        logger.LogWarning("Loaded {ContainerCount} running container(s) for update evaluation.", containers.Count);
+        logger.LogInformation("Loaded {ContainerCount} running container(s) for update evaluation.", containers.Count);
 
         foreach (var container in containers)
         {
@@ -40,7 +42,7 @@ public sealed class ContainerUpdateChecker(
                 var remoteDigest = await registryManifestClient.GetRemoteDigestAsync(container.ImageReference, cancellationToken);
                 if (!string.Equals(container.LocalDigest, remoteDigest, StringComparison.OrdinalIgnoreCase))
                 {
-                    logger.LogWarning(
+                    logger.LogInformation(
                         "Update detected for container {ContainerName}: local digest {LocalDigest}, remote digest {RemoteDigest}.",
                         container.Name,
                         container.LocalDigest,
@@ -53,7 +55,7 @@ public sealed class ContainerUpdateChecker(
                 }
                 else
                 {
-                    logger.LogWarning(
+                    logger.LogInformation(
                         "Container {ContainerName} is up to date for image {ImageName}.",
                         container.Name,
                         container.ImageName);
@@ -66,9 +68,9 @@ public sealed class ContainerUpdateChecker(
             }
         }
 
-        logger.LogWarning(
+        logger.LogInformation(
             "Finished update check at local time {CheckedAtLocal}. Updates found: {UpdateCount}. Errors: {ErrorCount}.",
-            checkedAtLocal,
+            checkedAtLocalText,
             updates.Count,
             errors.Count);
         return new UpdateCheckResult(checkedAtUtc, updates, errors);

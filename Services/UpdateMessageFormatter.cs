@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using DockerContainerUpdateChecker.Models;
 
 namespace DockerContainerUpdateChecker.Services;
@@ -9,7 +10,7 @@ public sealed class UpdateMessageFormatter : IUpdateMessageFormatter
     {
         var localCheckedAt = current.CheckedAtUtc.ToLocalTime();
         var builder = new StringBuilder();
-        builder.AppendLine($"Docker update check at {localCheckedAt:yyyy-MM-dd HH:mm:ss zzz} local time");
+        builder.AppendLine($"Docker update check at {localCheckedAt.ToString("G", CultureInfo.CurrentCulture)} local time");
         builder.AppendLine();
 
         if (current.Updates.Count == 0)

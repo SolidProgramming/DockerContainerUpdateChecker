@@ -18,6 +18,9 @@ If the local file does not exist yet, the app creates a starter file automatical
   "Server": {
     "Port": 8080
   },
+  "Localization": {
+    "Culture": "de-DE"
+  },
   "Scheduler": {
     "Cron": "0 6 * * *"
   },
@@ -36,6 +39,8 @@ If the local file does not exist yet, the app creates a starter file automatical
   }
 }
 ```
+
+Set `Localization:Culture` to a .NET culture such as `de-DE` or `en-US` to control localized date and time formatting in logs and notifications.
 
 ## Unraid / Docker notes
 

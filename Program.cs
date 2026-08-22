@@ -6,10 +6,22 @@ using DockerContainerUpdateChecker.Services;
 using Hangfire;
 using Hangfire.Dashboard;
 using Hangfire.InMemory;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 var localSettingsPath = AppSettingsLocalBootstrapper.EnsureExists();
+var bootstrapConfiguration = new ConfigurationBuilder()
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+    .AddJsonFile(localSettingsPath, optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables()
+    .Build();
+var configuredCultureName = bootstrapConfiguration[$"{LocalizationOptions.SectionName}:Culture"] ?? "en-US";
+var configuredCulture = CultureInfo.GetCultureInfo(configuredCultureName);
+CultureInfo.CurrentCulture = configuredCulture;
+CultureInfo.CurrentUICulture = configuredCulture;
+CultureInfo.DefaultThreadCurrentCulture = configuredCulture;
+CultureInfo.DefaultThreadCurrentUICulture = configuredCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,7 +30,16 @@ builder.Configuration
     .AddJsonFile(localSettingsPath, optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.TimestampFormat = $"{configuredCulture.DateTimeFormat.ShortDatePattern} {configuredCulture.DateTimeFormat.LongTimePattern} ";
+    options.UseUtcTimestamp = false;
+    options.SingleLine = true;
+});
+builder.Logging.SetMinimumLevel(LogLevel.Information);
+builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
+builder.Logging.AddFilter("System", LogLevel.Warning);
+builder.Logging.AddFilter("Hangfire", LogLevel.Warning);
 
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
@@ -26,6 +47,7 @@ builder.Services.AddSingleton<IValidateOptions<ServerOptions>, ServerOptionsVali
 builder.Services.AddSingleton<IValidateOptions<SchedulerOptions>, SchedulerOptionsValidator>();
 builder.Services.AddSingleton<IValidateOptions<TelegramOptions>, TelegramOptionsValidator>();
 builder.Services.AddSingleton<IValidateOptions<StorageOptions>, StorageOptionsValidator>();
+builder.Services.AddSingleton<IValidateOptions<LocalizationOptions>, LocalizationOptionsValidator>();
 
 builder.Services.AddOptions<ServerOptions>()
     .Bind(builder.Configuration.GetSection(ServerOptions.SectionName))
@@ -47,6 +69,10 @@ builder.Services.AddOptions<DockerOptions>()
 
 builder.Services.AddOptions<StorageOptions>()
     .Bind(builder.Configuration.GetSection(StorageOptions.SectionName))
+    .ValidateOnStart();
+
+builder.Services.AddOptions<LocalizationOptions>()
+    .Bind(builder.Configuration.GetSection(LocalizationOptions.SectionName))
     .ValidateOnStart();
 
 var configuredPort = builder.Configuration.GetValue<int?>($"{ServerOptions.SectionName}:Port") ?? 8080;
@@ -94,6 +120,7 @@ var schedulerOptions = app.Services.GetRequiredService<IOptions<SchedulerOptions
 var telegramOptions = app.Services.GetRequiredService<IOptions<TelegramOptions>>().Value;
 var dockerOptions = app.Services.GetRequiredService<IOptions<DockerOptions>>().Value;
 var storageOptions = app.Services.GetRequiredService<IOptions<StorageOptions>>().Value;
+var localizationOptions = app.Services.GetRequiredService<IOptions<LocalizationOptions>>().Value;
 var schedulerExpression = CronExpression.Parse(schedulerOptions.Cron, CronFormat.Standard);
 var resolvedDockerEndpoint = DockerEndpointResolver.Resolve(dockerOptions.Endpoint);
 var startupLocalTime = TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timeProvider.LocalTimeZone);
@@ -103,28 +130,31 @@ DateTimeOffset? nextRunLocal = nextRunUtc.HasValue
     : null;
 var telegramNotifier = app.Services.GetRequiredService<ITelegramNotifier>();
 var telegramBotIdentity = await telegramNotifier.GetBotIdentityAsync(CancellationToken.None);
+var startupLocalTimeText = startupLocalTime.ToString("G", configuredCulture);
+var nextRunLocalText = nextRunLocal?.ToString("G", configuredCulture);
 
-logger.LogWarning("Application startup completed at local time {StartupLocalTime}.", startupLocalTime);
-logger.LogWarning("Resolved local settings path: {LocalSettingsPath}", localSettingsPath);
-logger.LogWarning("Configured HTTP port: {Port}", serverOptions.Port);
-logger.LogWarning("Resolved container API endpoint: {DockerEndpoint}", resolvedDockerEndpoint);
-logger.LogWarning("Configured Telegram chat id: {TelegramChatId}", telegramOptions.ChatId);
-logger.LogWarning(
+logger.LogInformation("Application startup completed at local time {StartupLocalTime}.", startupLocalTimeText);
+logger.LogInformation("Resolved local settings path: {LocalSettingsPath}", localSettingsPath);
+logger.LogInformation("Configured HTTP port: {Port}", serverOptions.Port);
+logger.LogInformation("Resolved container API endpoint: {DockerEndpoint}", resolvedDockerEndpoint);
+logger.LogInformation("Configured Telegram chat id: {TelegramChatId}", telegramOptions.ChatId);
+logger.LogInformation("Configured localization culture: {Culture}", localizationOptions.Culture);
+logger.LogInformation(
     "Telegram bot validation succeeded. Bot id: {TelegramBotId}, username: {TelegramBotUsername}, display name: {TelegramBotName}.",
     telegramBotIdentity.Id,
     telegramBotIdentity.Username ?? "<no-username>",
     telegramBotIdentity.FirstName);
-logger.LogWarning("Sending Telegram startup test notification to chat id {TelegramChatId}.", telegramOptions.ChatId);
+logger.LogInformation("Sending Telegram startup test notification to chat id {TelegramChatId}.", telegramOptions.ChatId);
 await telegramNotifier.SendAsync(
-    $"Startup test notification sent at {startupLocalTime:yyyy-MM-dd HH:mm:ss zzz} local time.",
+    $"Startup test notification sent at {startupLocalTimeText} local time.",
     CancellationToken.None);
-logger.LogWarning("Telegram startup test notification sent successfully.");
-logger.LogWarning("Configured storage data directory: {DataDirectory}", storageOptions.DataDirectory);
-logger.LogWarning("Configured cron expression: {CronExpression}", schedulerOptions.Cron);
+logger.LogInformation("Telegram startup test notification sent successfully.");
+logger.LogInformation("Configured storage data directory: {DataDirectory}", storageOptions.DataDirectory);
+logger.LogInformation("Configured cron expression: {CronExpression}", schedulerOptions.Cron);
 
 if (nextRunLocal.HasValue)
 {
-    logger.LogWarning("Next scheduled docker update check will run at local time {NextRunLocalTime}.", nextRunLocal.Value);
+    logger.LogInformation("Next scheduled docker update check will run at local time {NextRunLocalTime}.", nextRunLocalText);
 }
 else
 {
@@ -165,6 +195,9 @@ internal static class AppSettingsLocalBootstrapper
         {
           "Server": {
             "Port": 8080
+          },
+          "Localization": {
+            "Culture": "en-US"
           },
           "Scheduler": {
             "Cron": "0 6 * * *"
