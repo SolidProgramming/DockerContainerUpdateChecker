@@ -87,3 +87,14 @@ Examples:
 - If Telegram returns `400 Bad Request`, a common reason is that the target user or group has not started a chat with the bot yet
 - For direct messages, open the bot in Telegram and send `/start` once before testing notifications
 - If the problem remains, verify that the configured `Telegram:ChatId` is correct
+
+## Create a Telegram bot
+
+1. Open Telegram and start a chat with `@BotFather`.
+2. Run `/newbot` and follow the prompts to create a bot.
+3. Copy the bot token from BotFather and set it as `Telegram:BotToken`.
+4. Open your new bot in Telegram and send `/start` once so the bot can message you directly.
+5. Send any additional message to the bot, then open `https://api.telegram.org/bot<your-bot-token>/getUpdates` in a browser.
+6. Find the `chat` object in the JSON response and copy the numeric `id` value into `Telegram:ChatId`.
+
+After both values are configured, restart the app and it will send a startup test notification after successful validation.
