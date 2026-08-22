@@ -33,7 +33,7 @@ public sealed class UpdateMessageFormatter : IUpdateMessageFormatter
         }
 
         builder.AppendLine(
-            $"<i>Checked:</i> {Encode(localCheckedAtText)} | <i>Scanned:</i> {current.CheckedContainerCount} | <i>Updates:</i> {updateCount} | <i>Duration:</i> {Encode(durationText)}{FormatWarningCountSuffix(warningCount)}");
+            $"<i>Checked:</i> {Encode(localCheckedAtText)} | <i>Scanned:</i> {current.CheckedContainerCount} | <i>Updates:</i> {current.UpdateCount} | <i>Up to date:</i> {current.UpToDateCount} | <i>Skipped:</i> {current.SkippedCount} | <i>Not checkable:</i> {current.NotCheckableCount} | <i>Errors:</i> {current.ErrorCount} | <i>Duration:</i> {Encode(durationText)}{FormatWarningCountSuffix(warningCount)}");
 
         if (updateCount > 0)
         {

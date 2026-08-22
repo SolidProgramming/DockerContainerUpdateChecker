@@ -31,6 +31,9 @@ public class UpdateStateComparerTests
             TimeSpan.FromSeconds(1),
             1,
             [
+                new ContainerCheckOutcome("api", "example/api:latest", ContainerCheckStatus.UpdateAvailable, ContainerCheckReason.None)
+            ],
+            [
                 new ContainerUpdateInfo("api", "example/api:latest", "sha256:old", "sha256:new")
             ],
             []);
@@ -55,7 +58,7 @@ public class UpdateStateComparerTests
             ]
         };
 
-        var current = new UpdateCheckResult(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(1), 1, [], []);
+        var current = new UpdateCheckResult(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(1), 1, [], [], []);
 
         Assert.IsTrue(Comparer.HasChanged(previous, current));
     }

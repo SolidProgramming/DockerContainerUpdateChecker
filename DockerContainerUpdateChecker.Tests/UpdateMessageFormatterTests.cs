@@ -17,6 +17,11 @@ public class UpdateMessageFormatterTests
             TimeSpan.FromSeconds(2.5),
             3,
             [
+                new ContainerCheckOutcome("nginx", "nginx:latest", ContainerCheckStatus.UpdateAvailable, ContainerCheckReason.None),
+                new ContainerCheckOutcome("redis", "redis:latest", ContainerCheckStatus.UpToDate, ContainerCheckReason.None),
+                new ContainerCheckOutcome("local", "localhost/app:latest", ContainerCheckStatus.NotCheckable, ContainerCheckReason.LocalImage)
+            ],
+            [
                 new ContainerUpdateInfo("nginx", "nginx:latest", "sha256:old", "sha256:new")
             ],
             []);
@@ -29,6 +34,8 @@ public class UpdateMessageFormatterTests
         StringAssert.Contains(message.Text, "<code>nginx:latest</code>");
         StringAssert.Contains(message.Text, "<i>Scanned:</i> 3");
         StringAssert.Contains(message.Text, "<i>Updates:</i> 1");
+        StringAssert.Contains(message.Text, "<i>Up to date:</i> 1");
+        StringAssert.Contains(message.Text, "<i>Not checkable:</i> 1");
     }
 
     [TestMethod]
@@ -52,6 +59,12 @@ public class UpdateMessageFormatterTests
             new DateTimeOffset(2026, 8, 22, 10, 0, 0, TimeSpan.Zero),
             TimeSpan.FromMilliseconds(850),
             4,
+            [
+                new ContainerCheckOutcome("nginx", "nginx:latest", ContainerCheckStatus.UpToDate, ContainerCheckReason.None),
+                new ContainerCheckOutcome("redis", "redis:latest", ContainerCheckStatus.UpToDate, ContainerCheckReason.None),
+                new ContainerCheckOutcome("db", "db:latest", ContainerCheckStatus.UpToDate, ContainerCheckReason.None),
+                new ContainerCheckOutcome("cache", "cache:latest", ContainerCheckStatus.UpToDate, ContainerCheckReason.None)
+            ],
             [],
             []);
 
@@ -70,6 +83,9 @@ public class UpdateMessageFormatterTests
             new DateTimeOffset(2026, 8, 22, 10, 0, 0, TimeSpan.Zero),
             TimeSpan.FromSeconds(1),
             2,
+            [
+                new ContainerCheckOutcome("api", "api:latest", ContainerCheckStatus.NotCheckable, ContainerCheckReason.RegistryUnavailable)
+            ],
             [],
             ["Registry lookup failed"]);
 
@@ -78,5 +94,6 @@ public class UpdateMessageFormatterTests
         StringAssert.Contains(message.Text, "⚠️ <b>Warnings</b>");
         StringAssert.Contains(message.Text, "Registry lookup failed");
         StringAssert.Contains(message.Text, "<i>Warnings:</i> 1");
+        StringAssert.Contains(message.Text, "<i>Not checkable:</i> 1");
     }
 }

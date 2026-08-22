@@ -19,16 +19,11 @@ public sealed class DockerContainerCatalog(
             new ContainersListParameters { All = false },
             cancellationToken);
 
-        var excluded = new HashSet<string>(monitoringOptions.ExcludedContainers ?? [], StringComparer.OrdinalIgnoreCase);
         var result = new List<ContainerDescriptor>();
 
         foreach (var container in containers)
         {
             var containerName = NormalizeContainerName(container);
-            if (excluded.Contains(containerName) || excluded.Contains(container.ID))
-            {
-                continue;
-            }
 
             if (!ImageReferenceParser.TryParse(container.Image, out var imageReference))
             {
@@ -53,6 +48,12 @@ public sealed class DockerContainerCatalog(
     {
         var name = container.Names?.FirstOrDefault() ?? container.ID;
         return name.Trim('/');
+    }
+
+    public bool IsExcluded(string containerName, string containerId)
+    {
+        var excluded = new HashSet<string>(monitoringOptions.ExcludedContainers ?? [], StringComparer.OrdinalIgnoreCase);
+        return excluded.Contains(containerName) || excluded.Contains(containerId);
     }
 
     private static string? ResolveLocalDigest(ImageReference imageReference, IList<string>? repoDigests)

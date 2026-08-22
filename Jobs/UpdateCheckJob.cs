@@ -40,7 +40,16 @@ public sealed class UpdateCheckJob(
         }
 
         var message = updateMessageFormatter.Format(previousState, currentResult);
-        await telegramNotifier.SendAsync(message, cancellationToken);
+        var sendSilently = currentResult.UpdateCount == 0
+            && currentResult.ErrorCount == 0
+            && currentResult.NotCheckableCount == 0
+            && currentResult.SkippedCount == 0
+            && (previousState is null || previousState.Updates.Count == 0);
+
+        logger.LogInformation(
+            "Sending Telegram notification with silent mode set to {SilentMode}.",
+            sendSilently);
+        await telegramNotifier.SendAsync(message, cancellationToken, silent: sendSilently);
 
         await updateStateStore.SaveAsync(currentState, cancellationToken);
         logger.LogInformation("Update check job finished and state was persisted.");

@@ -5,4 +5,6 @@ namespace DockerContainerUpdateChecker.Services;
 public interface IContainerCatalog
 {
     Task<IReadOnlyList<ContainerDescriptor>> GetRunningContainersAsync(CancellationToken cancellationToken);
+
+    bool IsExcluded(string containerName, string containerId);
 }
