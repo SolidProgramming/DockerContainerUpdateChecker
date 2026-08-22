@@ -6,7 +6,10 @@ using DockerContainerUpdateChecker.Services;
 using Hangfire;
 using Hangfire.Dashboard;
 using Hangfire.InMemory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
+AppSettingsLocalBootstrapper.EnsureExists();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +17,8 @@ builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
+
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
@@ -37,6 +42,9 @@ builder.Services.AddOptions<TelegramOptions>()
 builder.Services.AddOptions<MonitoringOptions>()
     .Bind(builder.Configuration.GetSection(MonitoringOptions.SectionName));
 
+builder.Services.AddOptions<DockerOptions>()
+    .Bind(builder.Configuration.GetSection(DockerOptions.SectionName));
+
 builder.Services.AddOptions<StorageOptions>()
     .Bind(builder.Configuration.GetSection(StorageOptions.SectionName))
     .ValidateOnStart();
@@ -55,11 +63,10 @@ builder.Services.AddHttpClient(TelegramNotifier.HttpClientName, client =>
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
-builder.Services.AddSingleton(_ =>
+builder.Services.AddSingleton(serviceProvider =>
 {
-    var endpoint = OperatingSystem.IsWindows()
-        ? new Uri("npipe://./pipe/docker_engine")
-        : new Uri("unix:///var/run/docker.sock");
+    var dockerOptions = serviceProvider.GetRequiredService<IOptions<DockerOptions>>().Value;
+    var endpoint = DockerEndpointResolver.Resolve(dockerOptions.Endpoint);
 
     return new DockerClientConfiguration(endpoint).CreateClient();
 });
@@ -74,6 +81,7 @@ builder.Services.AddSingleton<IUpdateMessageFormatter, UpdateMessageFormatter>()
 builder.Services.AddSingleton<IContainerUpdateChecker, ContainerUpdateChecker>();
 builder.Services.AddSingleton<JobExecutionGate>();
 builder.Services.AddSingleton<UpdateCheckJob>();
+builder.Services.AddSingleton<TelegramTestJob>();
 
 builder.Services.AddHangfire(configuration => configuration.UseInMemoryStorage());
 builder.Services.AddHangfireServer();
@@ -95,9 +103,55 @@ RecurringJob.AddOrUpdate<UpdateCheckJob>(
     methodCall: job => job.RunAsync(CancellationToken.None),
     cronExpression: schedulerOptions.Cron);
 
+RecurringJob.AddOrUpdate<TelegramTestJob>(
+    recurringJobId: "telegram-test-notification",
+    methodCall: job => job.RunAsync(CancellationToken.None),
+    cronExpression: "0 0 1 1 *");
+
 app.Run();
 
 internal sealed class AllowAllDashboardAuthorizationFilter : IDashboardAuthorizationFilter
 {
     public bool Authorize(DashboardContext context) => true;
+}
+
+internal static class AppSettingsLocalBootstrapper
+{
+    public static void EnsureExists()
+    {
+        var localSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.Local.json");
+        if (File.Exists(localSettingsPath))
+        {
+            return;
+        }
+
+        const string template = """
+        {
+          "Server": {
+            "Port": 8080
+          },
+          "Docker": {
+            "Endpoint": ""
+          },
+          "Telegram": {
+            "BotToken": "replace-me",
+            "ChatId": "replace-me"
+          },
+          "Storage": {
+            "DataDirectory": "/data"
+          }
+        }
+        """;
+
+        try
+        {
+            File.WriteAllText(localSettingsPath, template + Environment.NewLine);
+            Console.WriteLine($"Created default local settings file at '{localSettingsPath}'.");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"Failed to create default local settings file at '{localSettingsPath}': {ex.Message}");
+        }
+    }
 }

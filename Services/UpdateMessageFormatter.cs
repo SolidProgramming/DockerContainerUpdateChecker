@@ -7,8 +7,9 @@ public sealed class UpdateMessageFormatter : IUpdateMessageFormatter
 {
     public string Format(PersistedUpdateState? previous, UpdateCheckResult current)
     {
+        var localCheckedAt = current.CheckedAtUtc.ToLocalTime();
         var builder = new StringBuilder();
-        builder.AppendLine($"Docker update check at {current.CheckedAtUtc:yyyy-MM-dd HH:mm:ss} UTC");
+        builder.AppendLine($"Docker update check at {localCheckedAt:yyyy-MM-dd HH:mm:ss zzz} local time");
         builder.AppendLine();
 
         if (current.Updates.Count == 0)

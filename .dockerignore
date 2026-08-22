@@ -15,6 +15,7 @@ publish/
 TestResults/
 BenchmarkDotNet.Artifacts/
 coverage/
+data/
 
 # User-specific files
 *.user
@@ -23,11 +24,17 @@ coverage/
 *.userosscache
 *.sln.docstates
 *.*proj.user
+appsettings.Local.json
+appsettings.local.json
+last-update-state.json
 
 # Logs and local env files
 *.log
 .env
 .env.*
+
+# Unneeded source for container build
+DockerContainerUpdateChecker.Tests/
 
 # OS files
 .DS_Store
