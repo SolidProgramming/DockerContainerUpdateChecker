@@ -210,7 +210,7 @@ internal static class AppSettingsLocalBootstrapper
             "Culture": "en-US"
           },
           "Scheduler": {
-            "Cron": "0 6 * * *",
+            "Cron": "0 */6 * * *",
             "RunOnStartup": false
           },
           "Docker": {

@@ -4,7 +4,7 @@ public sealed class SchedulerOptions
 {
     public const string SectionName = "Scheduler";
 
-    public string Cron { get; set; } = "0 6 * * *";
+    public string Cron { get; set; } = "0 */6 * * *";
 
     public bool RunOnStartup { get; set; }
 }

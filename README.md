@@ -22,7 +22,7 @@ If the local file does not exist yet, the app creates a starter file automatical
     "Culture": "de-DE"
   },
   "Scheduler": {
-    "Cron": "0 6 * * *",
+    "Cron": "0 */6 * * *",
     "RunOnStartup": false
   },
   "Docker": {
