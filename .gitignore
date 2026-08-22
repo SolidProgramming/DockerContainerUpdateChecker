@@ -28,6 +28,9 @@ coverage*.xml
 *.log
 logs/
 
+# Local configuration
+appsettings.Local.json
+
 # Package artifacts
 *.nupkg
 *.snupkg
