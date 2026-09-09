@@ -1,8 +1,8 @@
-## Image: [solidprogramming/dockercontainerupdatechecker](https://hub.docker.com/repository/docker/solidprogramming/dockercontainerupdatechecker/)
-
 # DockerContainerUpdateChecker
 
 Checks running Docker containers for updated image digests and sends a Telegram notification when the detected update state changes. Scheduled runs and manual triggers are handled through Hangfire.
+
+## Image: [solidprogramming/dockercontainerupdatechecker](https://hub.docker.com/repository/docker/solidprogramming/dockercontainerupdatechecker/)
 
 ## Configuration
 
