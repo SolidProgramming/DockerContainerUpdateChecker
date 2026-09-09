@@ -28,6 +28,8 @@ public sealed class ContainerUpdateChecker(
         var containers = await containerCatalog.GetRunningContainersAsync(cancellationToken);
         logger.LogInformation("Loaded {ContainerCount} running container(s) for update evaluation.", containers.Count);
 
+        int delay = 2500;
+
         foreach (var container in containers)
         {
             if (containerCatalog.IsExcluded(container.Name, container.ContainerId))
@@ -119,6 +121,10 @@ public sealed class ContainerUpdateChecker(
                         container.Name,
                         container.ImageName);
                 }
+
+                logger.LogInformation("Waiting for {delay}ms so we don't get 429 status.", delay);
+
+                await Task.Delay(delay, cancellationToken);
             }
             catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
             {
@@ -147,6 +153,20 @@ public sealed class ContainerUpdateChecker(
                     "Container {ContainerName} is not checkable because the registry is unavailable.",
                     container.Name);
                 errors.Add($"Container '{container.Name}': registry unavailable.");
+            }
+            catch (HttpRequestException requestsEx) when (requestsEx.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                outcomes.Add(new ContainerCheckOutcome(
+                    container.Name,
+                    container.ImageName,
+                    ContainerCheckStatus.NotCheckable,
+                    ContainerCheckReason.RegistryUnavailable,
+                    requestsEx.Message));
+
+                logger.LogWarning(requestsEx,                    "Container {ContainerName} is not checkable because the registry is temporarily unavailable.",
+                    container.Name);
+
+                errors.Add($"Container '{container.Name}': registry temporarily unavailable.");
             }
             catch (Exception ex)
             {

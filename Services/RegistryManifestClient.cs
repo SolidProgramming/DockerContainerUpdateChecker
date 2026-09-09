@@ -11,6 +11,12 @@ public sealed partial class RegistryManifestClient(IHttpClientFactory httpClient
 {
     public const string HttpClientName = "registry";
 
+    // Docker Hub can throttle manifest and token requests independently.  Keep the
+    // retries here so every caller gets the same, registry-friendly behaviour.
+    private const int MaxRateLimitAttempts = 4;
+    private static readonly TimeSpan InitialRateLimitDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan MaxRateLimitDelay = TimeSpan.FromMinutes(1);
+
     private static readonly string[] AcceptedManifestTypes =
     [
         "application/vnd.oci.image.index.v1+json",
@@ -29,17 +35,39 @@ public sealed partial class RegistryManifestClient(IHttpClientFactory httpClient
         }
 
         using var client = httpClientFactory.CreateClient(HttpClientName);
+
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await GetRemoteDigestOnceAsync(client, imageReference, cancellationToken);
+            }
+            catch (RegistryRateLimitException ex) when (attempt < MaxRateLimitAttempts)
+            {
+                var delay = ex.RetryAfter ?? GetExponentialDelay(attempt);
+                await Task.Delay(delay, cancellationToken);
+            }
+        }
+    }
+
+    private static async Task<string> GetRemoteDigestOnceAsync(
+        HttpClient client,
+        ImageReference imageReference,
+        CancellationToken cancellationToken)
+    {
         var manifestUri = BuildManifestUri(imageReference);
 
         using var initialRequest = CreateManifestRequest(manifestUri, bearerToken: null);
         using var initialResponse = await client.SendAsync(initialRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
+        ThrowIfRateLimited(initialResponse);
         if (initialResponse.StatusCode == HttpStatusCode.Unauthorized)
         {
             var bearerToken = await ResolveBearerTokenAsync(client, initialResponse, imageReference, cancellationToken);
             using var authorizedRequest = CreateManifestRequest(manifestUri, bearerToken);
             using var authorizedResponse = await client.SendAsync(authorizedRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
+            ThrowIfRateLimited(authorizedResponse);
             authorizedResponse.EnsureSuccessStatusCode();
             return await ExtractDigestAsync(authorizedResponse, cancellationToken);
         }
@@ -127,6 +155,7 @@ public sealed partial class RegistryManifestClient(IHttpClientFactory httpClient
 
         var tokenUri = $"{realm}?{string.Join('&', queryParameters)}";
         using var tokenResponse = await client.GetAsync(tokenUri, cancellationToken);
+        ThrowIfRateLimited(tokenResponse);
         tokenResponse.EnsureSuccessStatusCode();
 
         await using var tokenStream = await tokenResponse.Content.ReadAsStreamAsync(cancellationToken);
@@ -147,6 +176,25 @@ public sealed partial class RegistryManifestClient(IHttpClientFactory httpClient
         throw new InvalidOperationException("Registry token response did not contain a bearer token.");
     }
 
+    private static void ThrowIfRateLimited(HttpResponseMessage response)
+    {
+        if (response.StatusCode != HttpStatusCode.TooManyRequests)
+        {
+            return;
+        }
+
+        var retryAfter = response.Headers.RetryAfter?.Delta
+            ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow);
+        throw new RegistryRateLimitException(
+            retryAfter.HasValue && retryAfter.Value > TimeSpan.Zero ? retryAfter : null);
+    }
+
+    private static TimeSpan GetExponentialDelay(int failedAttempt)
+    {
+        var delaySeconds = InitialRateLimitDelay.TotalSeconds * Math.Pow(2, failedAttempt - 1);
+        return TimeSpan.FromSeconds(Math.Min(delaySeconds, MaxRateLimitDelay.TotalSeconds));
+    }
+
     private static Dictionary<string, string> ParseChallengeParameters(string challenge)
     {
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -161,4 +209,10 @@ public sealed partial class RegistryManifestClient(IHttpClientFactory httpClient
 
     [GeneratedRegex("(?<key>[a-zA-Z]+)=\"(?<value>[^\"]*)\"")]
     private static partial Regex ChallengeValueRegex();
+
+    private sealed class RegistryRateLimitException(TimeSpan? retryAfter)
+        : HttpRequestException("The container registry temporarily rate-limited the request.", null, HttpStatusCode.TooManyRequests)
+    {
+        public TimeSpan? RetryAfter { get; } = retryAfter;
+    }
 }
